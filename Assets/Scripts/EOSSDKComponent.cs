@@ -1,83 +1,34 @@
-// This code is provided for demonstration purposes and is not intended to represent ideal practices.
+﻿// This code is provided for demonstration purposes and is not intended to represent ideal Unity practices.7
+// このコードはデモ用に提供されたもので、理想的なUnityの実践を示すものではありません。
 using Epic.OnlineServices;
 using Epic.OnlineServices.Auth;
 using Epic.OnlineServices.Logging;
 using Epic.OnlineServices.Platform;
-using System;
-using System.Runtime.InteropServices;
 using UnityEngine;
 
 public class EOSSDKComponent : MonoBehaviour
 {
-    // Set these values as appropriate.For more information, see the Developer Portal documentation.
-    public string m_ProductName = "MyUnityApplication";
-    public string m_ProductVersion = "1.0";
-    public string m_ProductId = "";
-    public string m_SandboxId = "";
-    public string m_DeploymentId = "";
-    public string m_ClientId = "";
-    public string m_ClientSecret = "";
+    // Set these values as appropriate. For more information, see the Developer Portal documentation.
+    // これらの値を適切に設定してください。詳細については、Developer Portalのドキュメントを参照してください。
+    readonly string m_ProductName = "MyUnityApplication";
+    readonly string m_ProductVersion = "1.0.0";
+    readonly string m_ProductId = "";
+    readonly string m_SandboxId = "";
+    readonly string m_DeploymentId = "";
+    readonly string m_ClientId = "";
+    readonly string m_ClientSecret = "";
+
     public LoginCredentialType m_LoginCredentialType = LoginCredentialType.AccountPortal;
-    /// These fields correspond to <see cref="Credentials.Id" /> and <see cref="Credentials.Token" />,
-    /// and their use differs based on the login type.For more information, see <see cref="Credentials" />
-    /// and the Auth Interface documentation.
+    /// These fields correspond to <see cref="Credentials.Id" /> and <see cref="Credentials.Token" />, and their use differs based on the login type.
+    /// For more information, see <see cref="Credentials" /> and the Auth Interface documentation.
+    /// これらのフィールドは、<see cref="Credentials.Id" />と<see cref="Credentials.Token" />に対応しており、その使用方法はログインタイプによって異なります。
+    /// 詳細については、<see cref="Credentials" />とAuth Interfaceのドキュメントを参照してください。
     public string m_LoginCredentialId = null;
     public string m_LoginCredentialToken = null;
 
     private static PlatformInterface s_PlatformInterface;
     private const float c_PlatformTickInterval = 0.1f;
     private float m_PlatformTickTimer = 0f;
-
-    // If we're in editor, we should dynamically load and unload the SDK between play sessions.
-    // This allows us to initialize the SDK each time the game is run in editor.
-#if UNITY_EDITOR
-    [DllImport("Kernel32.dll")]
-    private static extern IntPtr LoadLibrary(string lpLibFileName);
-
-    [DllImport("Kernel32.dll")]
-    private static extern int FreeLibrary(IntPtr hLibModule);
-
-    [DllImport("Kernel32.dll")]
-    private static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
-
-    private IntPtr m_LibraryPointer;
-#endif
-
-    private void Awake()
-    {
-#if UNITY_EDITOR
-        var libraryPath = $"Assets/{Config.LibraryName}";
-
-        m_LibraryPointer = LoadLibrary(libraryPath);
-        if (m_LibraryPointer == IntPtr.Zero)
-        {
-            throw new Exception($"Failed to load library {libraryPath}");
-        }
-
-        Bindings.Hook(m_LibraryPointer, GetProcAddress);
-#endif
-    }
-
-    private void OnApplicationQuit()
-    {
-        if (s_PlatformInterface != null)
-        {
-            s_PlatformInterface.Release();
-            s_PlatformInterface = null;
-            PlatformInterface.Shutdown();
-        }
-
-#if UNITY_EDITOR
-        if (m_LibraryPointer != IntPtr.Zero)
-        {
-            Bindings.Unhook();
-
-            // Free until the module ref count is 0
-            while (FreeLibrary(m_LibraryPointer) != 0) { }
-            m_LibraryPointer = IntPtr.Zero;
-        }
-#endif
-    }
 
     void Start()
     {
@@ -88,16 +39,26 @@ public class EOSSDKComponent : MonoBehaviour
         };
 
         var initializeResult = PlatformInterface.Initialize(initializeOptions);
-        if (initializeResult != Result.Success)
+
+        // This code is called each time the game is run in the editor, so we catch the case where the SDK has already been initialized in the editor.
+        // このコードは、エディターでゲームを実行するたびに呼び出されるので、エディターですでにSDKが初期化されている場合をキャッチします。
+        var isAlreadyConfiguredInEditor = Application.isEditor && initializeResult == Result.AlreadyConfigured;
+        if (initializeResult != Result.Success && !isAlreadyConfiguredInEditor)
         {
-            throw new Exception("Failed to initialize platform: " + initializeResult);
+            throw new System.Exception("Failed to initialize platform: " + initializeResult);
         }
 
         // The SDK outputs lots of information that is useful for debugging.
         // Make sure to set up the logging interface as early as possible: after initializing.
+        // SDKはデバッグに役立つ多くの情報を出力します。
+        // ロギングインターフェースの設定は、初期化後のできるだけ早い段階で行うようにしてください。
         LoggingInterface.SetLogLevel(LogCategory.AllCategories, LogLevel.VeryVerbose);
-        LoggingInterface.SetCallback((LogMessage logMessage) => Debug.Log(logMessage.Message));
+        LoggingInterface.SetCallback((LogMessage logMessage) =>
+        {
+            Debug.Log(logMessage.Message);
+        });
 
+        Debug.Log($"m_DeploymentId : {m_DeploymentId}");
         var options = new Options()
         {
             ProductId = m_ProductId,
@@ -113,7 +74,7 @@ public class EOSSDKComponent : MonoBehaviour
         s_PlatformInterface = PlatformInterface.Create(options);
         if (s_PlatformInterface == null)
         {
-            throw new Exception("Failed to create platform");
+            throw new System.Exception("Failed to create platform");
         }
 
         var loginOptions = new LoginOptions()
@@ -133,9 +94,9 @@ public class EOSSDKComponent : MonoBehaviour
             {
                 Debug.Log("Login succeeded");
             }
-            else if (Common.IsOperationComplete(loginCallbackInfo.ResultCode))
+            else
             {
-                Debug.Log("Login failed: " + loginCallbackInfo.ResultCode);
+                Debug.Log("Login returned " + loginCallbackInfo.ResultCode);
             }
         });
     }
@@ -152,6 +113,20 @@ public class EOSSDKComponent : MonoBehaviour
                 m_PlatformTickTimer = 0;
                 s_PlatformInterface.Tick();
             }
+        }
+    }
+
+    // When you release and shutdown the SDK library, you cannot initialize it again.
+    // Make sure this is done at a relevant time in your game's lifecycle.
+    // If you are working in editor, it is advised you do not release and shutdown the SDK
+    // as you would be required to restart Unity to initialize the SDK again.
+    private void OnDestroy()
+    {
+        if (!Application.isEditor && s_PlatformInterface != null)
+        {
+            s_PlatformInterface.Release();
+            s_PlatformInterface = null;
+            PlatformInterface.Shutdown();
         }
     }
 }
